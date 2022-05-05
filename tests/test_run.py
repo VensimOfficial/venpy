@@ -14,15 +14,15 @@ class TestRun(unittest.TestCase):
         func_time = []      
         def func():
             func_time.append(model['Time'])
-            return model['Cooling']
+            return model['cooling']
             
-        model['Cooling'] = func
+        model['cooling'] = func
         model.run(runname="test_valid_run_step", interval=5)
         self.assertTrue(np.all(np.diff(func_time) == 5.0))
     
     def test_invalid_run_step(self):
         model = venpy.load("../models/coffee_cup.vpm")
-        model['Cooling'] = lambda : 4
+        model['cooling'] = lambda : 4
         with self.assertRaises(ValueError):
             model.run(runname="test_invalid_run_step", interval=6)
         

@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 
-def load(model, dll='vendll32.dll'):
+def load(model, dll='vendll64.dll'):
     """Load compiled Vensim model using the Vensim DLL.
 
     Parameters
@@ -82,13 +82,15 @@ class VenPy(object):
 
             for n in names:
                 if n:
+                    n = n.lower()  # Vensim is not case sensitive, so operating in lower case prevents false rejections
                     self.vtype[n] = var
 
         #Set empty components dictionary
         self.components = OrderedDict()
+
         #Set runname as none when no simulation has taken place
         self.runname = None
-
+        self.issensitivity = False
 
     def __getitem__(self, key):
 
@@ -147,7 +149,7 @@ class VenPy(object):
             raise TypeError(message)
 
 
-    def run(self, runname='Run', interval=1):
+    def run(self, runname='Run', interval=1, sensitivity=None, debug=False):
         """
         Run the loaded Vensim model.
 
@@ -160,16 +162,31 @@ class VenPy(object):
             The number of time steps defining the interval for which the
             control of the simulation is returned to the user defined functions
             (if any). Communication occurs at the beginning of each interval.
+        sensitivity : tuple, default None
+            A tuple providing a pair of string names for the
+            sensitivity control file (.vsc) and
+            sensitivity savelist (.lst)
         """
         #Do not display any messages from Vensim
-        self.dll.vensim_be_quiet(1)
+        if not debug:
+            self.dll.vensim_be_quiet(1)
+
         #Set simulation name before running
         self.runname = runname
+        self.issensitivity = False  # may be overridden after checks below
         self.cmd("SIMULATE>RUNNAME|%s" % runname)
 
-        #Run entire simulation if no components are set
-        if not self.components:
-            self.cmd("MENU>RUN|O")
+        if sensitivity:
+            # sensitivity run
+            assert not self.components, "Sensitivity runs and gaming can't be combined."
+            self.issensitivity = True
+            scontrol, savelist = sensitivity  # unpack the input tuple
+            self.cmd('SIMULATE>SENSITIVITY|' + scontrol)
+            self.cmd('SIMULATE>SENSSAVELIST|' + savelist)
+            self.cmd("MENU>RUN_SENSITIVITY|o")
+        elif not self.components:
+            #Run entire simulation if no components are set
+            self.cmd("MENU>RUN|o")
         else:
             #Run simulation step by step
             initial = self.__getitem__("INITIAL TIME")
@@ -204,12 +221,59 @@ class VenPy(object):
         cmd : str
             Valid string command for Vensim DLL
         """
+        print(cmd)  # echo for debugging
         success = self.dll.vensim_command(_prepstr(cmd))
         if not success:
             raise Exception("Vensim command '%s' was not successful." % cmd)
 
+    def getresult(self, v):
+        maxn = self.dll.vensim_get_data(_prepstr(self.runname), _prepstr(v),
+                                        b'Time', None, None, 0)
 
-    def result(self, names=None, vtype=None):
+        vval = (ctypes.c_float * maxn)()
+        tval = (ctypes.c_float * maxn)()
+
+        success = self.dll.vensim_get_data(_prepstr(self.runname),
+                                           _prepstr(v),
+                                           b'Time', vval, tval, maxn)
+
+        if not success:
+            raise IOError("Could not retrieve data for '%s'" \
+                          " corresponding to run '%s'" % (v, self.runname))
+
+        return vval, success
+
+    def getsensitivity(self, v, attime):
+        # vensim_get_sens_at_time(const char *filename,const char *varname,const char *timename,const float *attime,float *vals,int maxn)
+        # This function will return 0 if the run does not exist, if the run is not a sensitivity run, or if the variable does not exist or was not saved.
+        # Therefore it may be hard to diagnose failure programmatically here.
+
+        # get the length of the result array needed
+        maxn = self.dll.vensim_get_sens_at_time(_prepstr(self.runname), _prepstr(v),
+                                                b'Time', None, None, 0)
+
+        # set up the result array
+        vval = (ctypes.c_float * maxn)()
+
+        # Vensim calling convention uses first element for time as input, and returns array of simulation #s as output
+        # populate the input
+        #arrtime = [0.0] * maxn  # array of 0s of length maxn
+        #arrtime[0] = attime  # add the input value
+        arrtime = [attime]
+        sval = (ctypes.c_float * 1)(*arrtime)  # use the list to initialize the argument
+
+        # retrieve values
+        success = self.dll.vensim_get_sens_at_time(_prepstr(self.runname),
+                                                   _prepstr(v),
+                                                   b'Time', sval, vval, maxn)
+
+        if not success:
+            raise IOError("Could not retrieve data for '%s'" \
+                          " corresponding to run '%s'" % (v, self.runname))
+
+        return vval, success
+
+    def result(self, names=None, vtype=None, sensitivitytime=None):
         """Get last model run results loaded into python. Specific variables
         can be retrieved using the `names` attribute, or all variables of a
         specific type can be returned using the `vtype` attribute.
@@ -237,20 +301,32 @@ class VenPy(object):
 
         #Make sure results are generated before retrieved
         assert self.runname, "Run before results can be obtained."
+
         #Make sure both kwargs are not set simultaneously
         assert not (names and vtype), "Only one of either 'names' or 'vtype'" \
         " can be set."
 
-        valid = set(['level', 'aux', 'game'])
+        # make sure this is a sensitivity run if needed
+        if sensitivitytime:
+            assert self.issensitivity, "Run a sensitivity run before retrieving sensitivity results"
+
+        # Added time_base to permit extracting time axes.
+        # Added constants to permit retrieving input assumptions from runs with unknown inputs
+        # Note that mixing constants and others might be tricky, since constants have only 1 value.
+        # Data might also be useful, but data vars may have unique time axes, which presents a challenge.
+        valid = set(['level', 'aux', 'game', 'time_base', 'constant'])
 
         if names:
-            #Make sure all names specified are in the model
-            assert all(n in self.vtype.keys() for n in names), "One or more " \
-            "names are not defined in Vensim."
+            # Make sure all names specified are in the model
+            # lower() is used because Vensim is not case sensitive
+            # assert all(n.lower() in self.vtype.keys() for n in names), "One or more names are not defined in Vensim."
+            # The assert above is annoying because it doesn't report the specific failure. Iterate with a for loop instead:
+            for n in names:
+                assert n.lower() in self.vtype.keys(), n+" not found in model."
             #Ensure specified names are of the appropriate type
-            types = set([self.vtype[n] for n in names])
+            types = set([self.vtype[n.lower()] for n in names])
             assert valid >= types, "One or more names are not of type " \
-            "'level', 'aux', or 'game'."
+            "'level', 'aux', 'game', 'constant' or 'time_base'."
             varnames = names
 
         elif vtype:
@@ -264,6 +340,12 @@ class VenPy(object):
         if not varnames:
             raise Exception("No variables of specified type(s).")
 
+        timeaxis, n = self.getresult('Time')
+        simaxis = []  # only needed for sensitivity runs; populated later
+        if sensitivitytime:
+            if sensitivitytime not in timeaxis:
+                raise Exception("Sensitivity time not found in time axis.")
+
         allvars = []
         for v in varnames:
             if self._is_subbed(v):
@@ -274,25 +356,20 @@ class VenPy(object):
         result = {}
 
         for v in allvars:
+            if sensitivitytime:
+                vval, n = self.getsensitivity(v, sensitivitytime)
+                if not simaxis:
+                    simaxis = range(n)
+                result[v] = np.array(vval)
+            else:
+                vval, n = self.getresult(v)
+                result[v] = np.array(vval)
+            # todo: it would make sense to check these results for consistent length
 
-            maxn = self.dll.vensim_get_data(_prepstr(self.runname), _prepstr(v), 
-                                            b'Time', None, None, 0)
-                                            
-            vval = (ctypes.c_float * maxn)()
-            tval = (ctypes.c_float * maxn)()
-
-            success = self.dll.vensim_get_data(_prepstr(self.runname), 
-                                               _prepstr(v), 
-                                               b'Time', vval, tval, maxn)
-
-            if not success:
-                raise IOError("Could not retrieve data for '%s'" \
-                " corresponding to run '%s'" % (v, self.runname))
-
-            result[v] = np.array(vval)
-
-        return pd.DataFrame(result, index=np.array(tval))
-
+        if sensitivitytime:
+            return pd.DataFrame(result, index=np.array(simaxis)).rename(index={0: "Simulation"})
+        else:
+            return pd.DataFrame(result, index=np.array(timeaxis)).rename(index={0: "Time"})
 
     def _run_udfs(self):
         for key in self.components:
