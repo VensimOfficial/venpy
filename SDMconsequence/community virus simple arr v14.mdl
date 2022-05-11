@@ -1,0 +1,1628 @@
+{UTF-8}
+:MACRO: DELAY3G(input,delayTime,histGrowth)
+DELAY3G = D3*3/delayTime
+	~	input
+	~	Third order delay, initialized to a historic growth rate.
+	|
+
+D3 = INTEG(D2*3/delayTime-D3*3/delayTime, input*delayTime/3*EXP(-delayTime/3*histGrowth\
+		) )
+	~	input*delayTime
+	~	Third delay stage
+	|
+
+D2 = INTEG(D1*3/delayTime-D2*3/delayTime, input*delayTime/3*EXP(-delayTime*2/3*histGrowth\
+		) )
+	~	input*delayTime
+	~	Second delay stage
+	|
+
+D1 = INTEG(input-D1*3/delayTime, input*delayTime/3*EXP(-delayTime*histGrowth) )
+	~	input*delayTime
+	~		|
+
+:END OF MACRO:
+Hospitalization per Capita=
+	SUM(Hospitalized[Risk!])/Initial Population
+	~	fraction
+	~		|
+
+Log10 Fatality Rate=
+	-2.3
+	~	dmnl [-3,-1]
+	~		|
+
+Peak Prevalence=
+	SAMPLE IF TRUE(Prevalence>Peak Prevalence, Prevalence , Prevalence )
+	~	fraction
+	~		|
+
+Social Mobilization[Risk]=
+	SMOOTH3(Relative Behavior Change[Risk]
+	*(Hospitalization per Capita/Behavior Change Threshold)^Behavior Sensitivity
+	/(1+(Hospitalization per Capita/Behavior Change Threshold)^Behavior Sensitivity)
+	/(1+LT Behavioral Cost[Risk]/Fatigue Threshold),Behavior Response Time)
+	~	dmnl
+	~		|
+
+Advancing[Risk]=
+	Infectious Symptomatic[Risk]*(1-Fraction Requiring Hospitalization[Risk])/Time to Advance
+	~	people/day
+	~		|
+
+Base Rate of Similar Symptoms=
+	0.001
+	~	fraction
+	~		|
+
+Case Reporting Lag=
+	7
+	~	days
+	~		|
+
+Death Reporting Lag=
+	7
+	~	days
+	~		|
+
+Dying[Risk]=
+	Hospitalized[Risk]/Serious Duration*Fatality Rate[Risk]
+	~	people/day
+	~		|
+
+Emerging[Risk]=
+	Exposed[Risk]/Time to Infectious
+	~	people/day
+	~		|
+
+Eventual Case Capture[Risk]=
+	0,1
+	~	fraction
+	~		|
+
+Fraction Behavior as Distance=
+	0.5
+	~	fraction [0,1]
+	~		|
+
+Fraction Observed[Risk]=
+	Initial Case Capture[Risk] 
+	+ (Eventual Case Capture[Risk]-Initial Case Capture[Risk])*(1-EXP(-(Time-INITIAL TIME\
+		)*3/Time to Max Capture))
+	~	fraction
+	~	Fraction of cases captured by reporting system. Starts at initial value \
+		and rises towards the eventual value via exponential decay (goal seeking). \
+		Time constant is one third the time to max capture, so that 95% of the gap \
+		to the eventual value is closed over that interval.
+	|
+
+Future Harm Cost=
+	SUM(Recovering[Risk!]*Residual Harm per Recovery[Risk!]
+	+Hospitalized Recovering[Risk!]*Residual Hospitalization Cost)
+	~	$/day
+	~		|
+
+Group Isolation=
+	0
+	~	dmnl [0,1]
+	~		|
+
+growth rate=
+	LN(XIDZ(SUM(Infecting[Risk!]),SMOOTH(SUM(Infecting[Risk!]),TIME STEP),1))/TIME STEP
+	~	fraction/day
+	~		|
+
+Historic Growth Rate=
+	0.3
+	~	fraction/day
+	~		|
+
+Hospitalized[Risk]= INTEG (
+	Hospitalizing[Risk]-Dying[Risk]-Hospitalized Recovering[Risk],
+		Hospitalizing[Risk]*Serious Duration*EXP(-Serious Duration*Initial Growth Rate))
+	~	people
+	~		|
+
+Hospitalized Recovering[Risk]=
+	Hospitalized[Risk]/Serious Duration*(1-Fatality Rate[Risk])
+	~	people/day
+	~		|
+
+Hospitalizing[Risk]=
+	Infectious Symptomatic[Risk]*Fraction Requiring Hospitalization[Risk]/Time to Advance
+	~	people/day
+	~		|
+
+Infected Caseload=
+	SUM(Exposed[Risk!]+Infectious Asymptomatic[Risk!]+Infectious Symptomatic[Risk!])
+	~	people
+	~		|
+
+Infectious Asymptomatic[Risk]= INTEG (
+	Emerging[Risk]-Onset[Risk],
+		Emerging[Risk]*Time to Onset*EXP(-Time to Onset*Initial Growth Rate))
+	~	people
+	~		|
+
+Infectious Symptomatic[Risk]= INTEG (
+	Onset[Risk]-Advancing[Risk]-Hospitalizing[Risk],
+		Onset[Risk]*Time to Advance*EXP(-Time to Advance*Initial Growth Rate))
+	~	people
+	~		|
+
+Initial Case Capture[Risk]=
+	0,0.25
+	~	fraction
+	~	Fraction of cases reported as of day 0
+	|
+
+Initial Growth Rate=
+	0.666
+	~	fraction/day
+	~		|
+
+Initial Observable Infection Rate=
+	2150
+	~	people [0,4000]
+	~		|
+
+Initial Test Rate=
+	300
+	~	tests/day
+	~		|
+
+Labor Participation[Risk]=
+	1,0.3
+	~	fraction
+	~		|
+
+Linear Testing=
+	MIN(Initial Test Rate+Test Growth Rate*(Time-INITIAL TIME),Max Test Rate)
+	~	tests/day
+	~		|
+
+Lockdown Phasing=
+	1-Phasing Amplitude*PULSE TRAIN(Phasing Start, Phase Duration/2 , Phase Duration , 1e+06\
+		)
+	~	dmnl
+	~		|
+
+Max Test Rate=
+	100000
+	~	tests/day
+	~		|
+
+Mobilization=
+	(Cases per Capita/Isolation Threshold)^Isolation Threshold Sensitivity
+	/(1+(Cases per Capita/Isolation Threshold)^Isolation Threshold Sensitivity)
+	~	fraction
+	~		|
+
+Observable Prevalence=
+	Observed Active Cases/Population
+	~	fraction
+	~		|
+
+Observed Case Onset=
+	SUM(Onset[Risk!]*Fraction Observed[Risk!])
+	~	people/day
+	~		|
+
+Observed Fatality Rate=
+	ZIDZ(Total Deaths,SUM(Recovered[Risk!]*Fraction Observed[Risk!])+Total Deaths)
+	~	fraction
+	~	Case fatality rate from comparison of deaths (assumed 100% reporting) and known \
+		cases.
+		Todo: slight accounting mismatch due to assumed 100% capture of deaths.
+	|
+
+Onset[Risk]=
+	Infectious Asymptomatic[Risk]/Time to Onset
+	~	people/day
+	~		|
+
+Phase Duration=
+	30
+	~	days
+	~		|
+
+Phasing Amplitude=
+	0
+	~	fraction [0,1]
+	~		|
+
+Phasing Start=
+	90
+	~	day
+	~		|
+
+Population=
+	SUM(Susceptible[Risk!]+Exposed[Risk!]+Mildly Ill or Asymptomatic[Risk!]+Recovered[Risk\
+		!])
+	~	people
+	~		|
+
+Prevalence=
+	SUM(Exposed[Risk!]+Mildly Ill or Asymptomatic[Risk!])/Population
+	~	fraction
+	~		|
+
+Prevalence Among Symptomatic=
+	Prevalence/(Prevalence+Base Rate of Similar Symptoms)
+	~	fraction
+	~		|
+
+Relative Isolation Effectiveness Pre Symptoms=
+	0
+	~	fraction [0,1]
+	~		|
+
+Reported Cases  = DELAY3G(Observed Case Onset,Case Reporting Lag,Historic Growth Rate\
+		)
+	~	people/day
+	~		|
+
+Reported Deaths=
+	DELAY3G(SUM(Dying[Risk!]),Death Reporting Lag,Historic Growth Rate)
+	~	people/day
+	~		|
+
+Residual Harm per Recovery[Risk]=
+	0,1000
+	~	$/person [0,?]
+	~		|
+
+Residual Hospitalization Cost=
+	10000
+	~	$/person [0,?]
+	~		|
+
+Self Isolation Effectiveness=
+	0
+	~	fraction [0,1]
+	~		|
+
+Serious Duration=
+	10
+	~	days
+	~		|
+
+Test Growth Rate=
+	100
+	~	tests/day/day
+	~		|
+
+Time to Advance=
+	2
+	~	days
+	~		|
+
+Time to Max Capture=
+	30
+	~	days
+	~	Time to close 95% of the gap between initial and eventual capture values.
+	|
+
+Time to Onset=
+	2
+	~	days
+	~		|
+
+Total Deaths=
+	SUM(Deaths[Risk!])
+	~	people
+	~		|
+
+Total Exposed=
+	SUM(Exposed[Risk!])
+	~	people
+	~		|
+
+Total Fatality Rate=
+	ZIDZ(Total Deaths,Total Deaths+Total Recovered)
+	~	fraction
+	~		|
+
+Total Recovered=
+	SUM(Recovered[Risk!])
+	~	people
+	~		|
+
+Total Susceptible=
+	SUM(Susceptible[Risk!])
+	~	people
+	~		|
+
+********************************************************
+	.community corona 8+duration x 2
+********************************************************~
+		Copyright 2020 Tom Fiddaman, Ventana Systems, Inc.
+		
+		Permission is hereby granted, free of charge, to any person obtaining a copy of this \
+		software and associated documentation files (the "Software"), to deal in \
+		the Software without restriction, including without limitation the rights \
+		to use, copy, modify, merge, publish, distribute, sublicense, and/or sell \
+		copies of the Software, and to permit persons to whom the Software is \
+		furnished to do so, subject to the following conditions:
+		
+		The above copyright notice and this permission notice shall be included in all \
+		copies or substantial portions of the Software.
+		
+		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR \
+		IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, \
+		FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL \
+		THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER \
+		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING \
+		FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER \
+		DEALINGS IN THE SOFTWARE.
+	|
+
+Treated Fatality Rate= INITIAL(
+	10^Log10 Fatality Rate)
+	~	fraction [0,1]
+	~	Total population case fatality rate with good health care. Flu = .001. S \
+		Korea  = .006 (as of 3/20/2020).
+	|
+
+Active Infectious[Risk]=
+	Infectious Symptomatic[Risk]*(1-MAX(Self Isolation Effectiveness,Quarantine Effectiveness\
+		[Risk])) 
+	+ Infectious Asymptomatic[Risk]*(1-Relative Isolation Effectiveness Pre Symptoms*Quarantine Effectiveness\
+		[Risk])
+	~	people
+	~	Effective number of infected people, after adjusting for reduction in \
+		infectiousness from isolation, quarantine, and monitoring.
+	|
+
+Adapted Behavioral Risk[Risk]= INTEG (
+	Adapting[Risk],
+		Relative Behavioral Risk[Risk])
+	~	dmnl
+	~		|
+
+Adapting[Risk]=
+	(Relative Behavioral Risk[Risk]-Adapted Behavioral Risk[Risk])/Time to Adapt
+	~	fraction/day
+	~		|
+
+Available Hospital Beds per 000 Capita=
+	3
+	~	beds/kperson [0.1,10]
+	~		|
+
+Beds per 000 COVID19 Patient=
+	1000
+	~	beds/kperson [0,1000]
+	~		|
+
+Behavior Change Threshold=
+	0.0001
+	~	fraction [1e-06,0.1]
+	~		|
+
+Behavior Cost LT Multiplier=
+	0.5
+	~	dmnl [0,?]
+	~		|
+
+Behavior Cost Scale=
+	130
+	~	$/person/day [0,200]
+	~		|
+
+Behavior Nonlinearity=
+	1.2
+	~	dmnl
+	~		|
+
+Behavior Response Time=
+	14
+	~	day [1,60]
+	~	Time for behavior changes to be fully implemented.
+	|
+
+Behavior Sensitivity=
+	2
+	~	dmnl
+	~		|
+
+Behavioral Risk Reduction=
+	0
+	~	fraction [0,1]
+	~	Fractional reduction in risk from social distancing, increased \
+		handwashing, and other behavioral measures.
+	|
+
+Cases per Capita=
+	Observed Active Cases/Initial Population
+	~	fraction
+	~		|
+
+Contact Density Decline=
+	3
+	~	dmnl [0,4]
+	~	Slope of decline in contacts as the infection penetrates to less-connected \
+		portions of the social network.
+	|
+
+Contact Stratification=
+	0
+	~	dmnl [0,1]
+	~		|
+
+Cumulative Cost= INTEG (
+	Total Cost,
+		0)
+	~	$
+	~		|
+
+Deaths[Risk]= INTEG (
+	Dying[Risk],
+		0)
+	~	people
+	~	Cumulative infections resolving to death.
+	|
+
+Effect of Season=
+	1-Seasonal Amplitude+Seasonal Amplitude*(1+COS( 2*3.14159*(Time-Peak Season)/Seasonal Period\
+		 ))/2
+	~	dmnl
+	~	Effect of season on transmission - peak transmission occurs in winter; \
+		transmission in trough = (1-amplitude)
+	|
+
+Exposed[Risk]= INTEG (
+	Infecting[Risk]-Emerging[Risk],
+		Initial Infection Rate*Initial Growth Rate*Time to Infectious*EXP(-Time to Infectious\
+		*Initial Growth Rate))
+	~	people
+	~	Exposed, asymptomatic population. As a simplification, assumed to be \
+		non-infectious, though there appears to be some infectivity for \
+		coronavirus in reality.
+	|
+
+Fatality Rate[High]=
+	Treated Fatality Rate/High Risk Share
+	*(1+(Untreated Fatality Multiplier-1)*Hospital Strain^Hospital Capacity Sensitivity
+	/(1+Hospital Strain^Hospital Capacity Sensitivity))
+	/Fraction Requiring Hospitalization[High] ~~|
+Fatality Rate[Low]=
+	0
+	~	fraction
+	~		|
+
+Fatigue Threshold=
+	100
+	~	$/person/day [1,100]
+	~		|
+
+Fraction Infectious[Risk]=
+	ZIDZ(Active Infectious[Risk],Group Share[Risk]*Initial Population)
+	~	fraction
+	~		|
+
+Fraction of Contacts with Group[FromRisk,ToRisk]=
+	Contact Stratification*IF THEN ELSE(FromRisk=ToRisk,1,0)
+	+(1-Contact Stratification)*Group Share[FromRisk]*IF THEN ELSE(FromRisk=ToRisk,1,1-Group Isolation\
+		)
+	~	fraction
+	~		|
+
+Fraction Requiring Hospitalization[High]=
+	0.3 ~~|
+Fraction Requiring Hospitalization[Low]=
+	0
+	~	fraction [0,1,0.01]
+	~	Fraction of infected who require hospitalization. Lancet: of 20% with \
+		severe or critical illness, 6% are critical. \
+		https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30567-5/\
+		fulltext
+	|
+
+Fraction Susceptible[Risk]=
+	ZIDZ(Susceptible[Risk],Initial Population*Group Share[Risk])
+	~	fraction
+	~	Fraction of initial population remaining susceptible.
+	|
+
+FromRisk<->
+	Risk
+	~	
+	~		|
+
+Group Share[High]=
+	High Risk Share ~~|
+Group Share[Low]=
+	1-High Risk Share
+	~	fraction [0,1]
+	~		|
+
+High Risk Share=
+	0.2
+	~	dmnl [0.1,0.9]
+	~	Lancet: 80% mild or asymptomatic. \
+		https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30567-5/\
+		fulltext
+		US share of population over 65  = 17%.  \
+		https://acl.gov/sites/default/files/Aging%20and%20Disability%20in%20America\
+		/2017OlderAmericansProfile.pdf
+		High risk adults = 105.5 million in US. \
+		https://www.kff.org/global-health-policy/issue-brief/how-many-adults-are-at\
+		-risk-of-serious-illness-if-infected-with-coronavirus/ (=32% of population)
+	|
+
+Hospital Capacity=
+	Initial Population*Available Hospital Beds per 000 Capita/Beds per 000 COVID19 Patient
+	~	people
+	~	Hospital capacity, expressed as number of serious infected cases that can \
+		be handled given beds, staff, etc.
+	|
+
+Hospital Capacity Sensitivity=
+	2
+	~	dmnl [1,5]
+	~	Sensitivity of care quality to capacity.
+	|
+
+Hospital Strain=
+	SUM(Hospitalized[Risk!])/Hospital Capacity
+	~	Index
+	~	Strain on hospital capacity, from ratio of serious cases to capacity.
+	|
+
+Hospitalization Cost=
+	500
+	~	$/person/day
+	~		|
+
+Infecting[Risk]=
+	Susceptible[Risk]*SUM(Fraction Infectious[FromRisk!]*Fraction of Contacts with Group\
+		[FromRisk!,Risk])*Transmission Rate[Risk]
+	~	people/day
+	~		|
+
+Infection Cost=
+	SUM(Hospitalized[Risk!])*Hospitalization Cost
+	+ SUM((Infectious Symptomatic[Risk!]+Mildly Ill or Asymptomatic[Risk!])*Labor Participation\
+		[Risk!])*Lost Work Cost
+	~	$/day
+	~		|
+
+Initial Infection Rate= INITIAL(
+	Initial Observable Infection Rate/SUM(Group Share[Risk!]*Fraction Observed[Risk!]))
+	~	people [0,?]
+	~	Number of infections initially imported into the region.
+	|
+
+Initial Population=
+	3.3e+08
+	~	people [1,2e+09]
+	~		|
+
+Initial Uncontrolled Transmission Rate=
+	R0/(Time to Onset+Time to Advance)
+	~	people/person/day
+	~	Initial transmission rate, with 100% susceptibles and no controls.
+	|
+
+Isolation Threshold=
+	1e-06
+	~	fraction
+	~		|
+
+Isolation Threshold Sensitivity=
+	2
+	~	dmnl
+	~		|
+
+Lost Work Cost=
+	130
+	~	$/person/day
+	~		|
+
+LT Behavioral Cost[Risk]= ACTIVE INITIAL (
+	Behavior Cost LT Multiplier*SMOOTH(ST Behavioral Cost[Risk],LT Cost Time Scale),
+		0)
+	~	$/person/day
+	~		|
+
+LT Cost Time Scale=
+	30
+	~	days [0,1000]
+	~		|
+
+Mild Duration[Risk]=
+	2,10
+	~	day [1,10]
+	~	Duration of illness after the initial symptomatic period.
+	|
+
+Mildly Ill or Asymptomatic[Risk]= INTEG (
+	Advancing[Risk]-Recovering[Risk],
+		Advancing[Risk]*Mild Duration[Risk]*EXP(-Mild Duration[Risk]*Initial Growth Rate))
+	~	people
+	~	Infected, symptomatic, infectious people.
+	|
+
+Mitigation Cost=
+	SUM((LT Behavioral Cost[Risk!]+ST Behavioral Cost[Risk!])*(Exposed[Risk!]+Susceptible\
+		[Risk!]+Recovered[Risk!]))
+	~	$/day
+	~		|
+
+Mortality Cost=
+	Statistical Value of Life*SUM(Dying[Risk!])
+	~	$/day
+	~		|
+
+Observed Active Cases=
+	SUM(Fraction Observed[Risk!]*(Mildly Ill or Asymptomatic[Risk!]+Infectious Symptomatic\
+		[Risk!])
+	+Hospitalized[Risk!])
+	~	people
+	~		|
+
+Peak Season=
+	0
+	~	day
+	~		|
+
+Potential Frac Population Quarantined=
+	0.01
+	~	fraction [0.0001,0.1]
+	~	Fraction of population in quarantine, monitoring, isolation that can be \
+		managed before public health efforts become overloaded.
+	|
+
+Potential Quarantine Effectiveness=
+	0
+	~	fraction [0,1]
+	~	Effect of isolation and monitoring measures, absent strain on the system.
+	|
+
+Public Health Capacity=
+	Initial Population*Potential Frac Population Quarantined
+	~	people
+	~	Capacity of the public health system to monitor, quarantine, and trace \
+		contacts. Expressed as number of infected people that can be managed.
+	|
+
+Public Health Capacity Sensitivity=
+	2
+	~	dmnl [1,5]
+	~	Sensitivity of public health performance to capacity constraint.
+	|
+
+Public Health Strain=
+	Infected Caseload/Public Health Capacity
+	~	Index
+	~	Strain on the public health system, expressed as the burden of infected \
+		relative to capacity.
+	|
+
+Quarantine Effectiveness[Risk]=
+	Mobilization*Potential Quarantine Effectiveness*Relative Isolation Effectiveness[Risk\
+		]
+	/(1+Public Health Strain^Public Health Capacity Sensitivity)
+	~	fraction
+	~	Fractional reduction in infections gained by isolating infected persons.
+	|
+
+R0=
+	2.5
+	~	dmnl [1,6]
+	~	Base reproduction ratio for the disease. Plausible range reported for \
+		coronavirus is about 2.2-3.9.
+	|
+
+Recovered[Risk]= INTEG (
+	Hospitalized Recovering[Risk]+Recovering[Risk],
+		0)
+	~	people
+	~	Cumulative recovered people. As a simplification, these are assumed immune \
+		- there is no reinfection.
+	|
+
+Recovering[Risk]=
+	Mildly Ill or Asymptomatic[Risk]/Mild Duration[Risk]
+	~	people/day
+	~		|
+
+Relative Behavior Change[Low]=
+	Relative Behavior Change for Low Risk ~~|
+Relative Behavior Change[High]=
+	1
+	~	dmnl
+	~		|
+
+Relative Behavior Change for Low Risk=
+	0.5
+	~	fraction [0,1]
+	~		|
+
+Relative Behavioral Risk[Risk]=
+	1-Behavioral Risk Reduction*Social Mobilization[Risk]*Lockdown Phasing
+	~	dmnl
+	~		|
+
+Relative Contact Density[Risk]=
+	Fraction Susceptible[Risk]^Contact Density Decline
+	~	dmnl
+	~	Decline in contacts as the infection penetrates to less-connected portions \
+		of the social network. The effect is real, but the functional form is \
+		notional here. This would be a good focus for improvement.
+	|
+
+Relative Isolation Effectiveness[Low]=
+	Relative Isolation Effectiveness for Low Risk ~~|
+Relative Isolation Effectiveness[High]=
+	1
+	~	dmnl
+	~		|
+
+Relative Isolation Effectiveness for Low Risk=
+	0
+	~	fraction [0,1]
+	~		|
+
+Risk:
+	Low,High
+	~	
+	~		|
+
+Seasonal Amplitude=
+	0
+	~	dmnl [0,1]
+	~	Amplitude of seasonal swings in transmission.
+	|
+
+Seasonal Period=
+	365
+	~	days
+	~	One year
+	|
+
+ST Behavioral Cost[Risk]=
+	Behavior Cost Scale*Labor Participation[Risk]*Fraction Behavior as Distance
+	*MAX(0,Adapted Behavioral Risk[Risk]-Relative Behavioral Risk[Risk])^Behavior Nonlinearity
+	~	$/person/day
+	~		|
+
+Statistical Value of Life=
+	1e+07
+	~	$/person [0,2e+07]
+	~		|
+
+Susceptible[Risk]= INTEG (
+	-Infecting[Risk],
+		Initial Population*Group Share[Risk])
+	~	people
+	~	Susceptible population.
+	|
+
+Time to Adapt=
+	730
+	~	days [1,1000]
+	~		|
+
+Time to Infectious=
+	3
+	~	day [1,10]
+	~	Time to onset of symptoms among exposed people.
+	|
+
+ToRisk<->
+	Risk
+	~	
+	~		|
+
+Total Cost=
+	Infection Cost+Mitigation Cost+Mortality Cost+Future Harm Cost
+	~	$/day
+	~		|
+
+Transmission Rate[Risk]=
+	Initial Uncontrolled Transmission Rate*Relative Behavioral Risk[Risk]*Relative Contact Density\
+		[Risk]*Effect of Season
+	~	fraction/day
+	~	Fractional rate of transmission from non-isolated infected to the \
+		susceptible population.
+	|
+
+Untreated Fatality Multiplier=
+	2
+	~	fraction [1,10]
+	~	Multiplier on fatalities when medical treatment is unavailable.
+	|
+
+********************************************************
+	.Control
+********************************************************~
+		Simulation Control Parameters
+	|
+
+FINAL TIME  = 365
+	~	day
+	~	The final time for the simulation.
+	|
+
+INITIAL TIME  = 0
+	~	day
+	~	The initial time for the simulation.
+	|
+
+SAVEPER  = 1
+	~	day [0,?]
+	~	The frequency with which output is stored.
+	|
+
+TIME STEP  = 0.125
+	~	day [0,?]
+	~	The time step for the simulation.
+	|
+
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Full Model Structure
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-0|-1--1--1|-1--1--1|96,96,100,0
+10,1,Susceptible,273,576,49,24,3,131,0,0,-1,0,0,0,0,0,0,0,0,0
+10,2,Exposed,516,578,45,23,3,131,0,0,-1,0,0,0,0,0,0,0,0,0
+10,3,Mildly Ill or Asymptomatic,1165,579,55,24,3,131,0,0,-1,0,0,0,0,0,0,0,0,0
+10,4,Recovered,1470,575,48,25,3,131,0,0,-1,0,0,0,0,0,0,0,0,0
+11,5,0,395,573,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,6,Infecting,395,611,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,7,5,1,100,0,0,22,3,0,0,0-0-255,|||0-0-0,1|(355,573)|
+1,8,5,2,4,0,0,22,1,0,0,255-0-0,|||0-0-0,1|(436,573)|
+10,9,Time to Infectious,619,511,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,10,Initial Uncontrolled Transmission Rate,236,365,75,30,8,3,1,0,0,0,0,0,0,0,0,0,0,0
+10,11,R0,211,276,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,12,11,10,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,13,Quarantine Effectiveness,769,771,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,14,Mild Duration,1432,633,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,15,Initial Population,137,572,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+1,16,15,1,0,1,0,0,3,128,1,0-0-0,|||0-0-0,1|(0,0)|
+1,17,19,4,4,0,0,22,0,0,0,-1--1--1,,1|(1359,578)|
+1,18,19,3,100,0,0,22,0,0,0,-1--1--1,,1|(1252,578)|
+11,19,0,1290,578,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,20,Recovering,1290,616,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,21,3,20,1,0,0,0,3,128,0,0-0-0,|||0-0-0,1|(1200,608)|
+1,22,14,20,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(1351,627)|
+10,23,Initial Infection Rate,443,500,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,24,Relative Behavioral Risk,400,367,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,25,Behavioral Risk Reduction,338,265,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,26,25,24,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+12,27,0,583,1064,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Susceptible,graph
+12,28,0,882,1064,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Exposed,graph
+12,29,0,1181,1064,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Mildly Ill or Asymptomatic,graph
+12,30,0,1480,1064,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Observed Active Cases,Graph
+12,31,0,1779,1064,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Total Deaths,Graph
+10,32,Fraction Susceptible,192,500,75,30,8,3,1,0,0,0,0,0,0,0,0,0,0,0
+10,33,Transmission Rate,349,473,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,34,1,32,1,1,0,0,3,64,0,0-0-0,|||0-0-0,1|(212,542)|
+1,35,15,32,1,1,0,0,1,64,0,0-0-0,|||0-0-0,1|(148,532)|
+1,36,24,33,1,0,0,12,1,64,0,0-128-0,|||0-0-0,1|(368,405)|
+1,37,10,33,1,1,0,0,1,64,0,0-0-0,|||0-0-0,1|(294,407)|
+1,38,33,5,1,0,0,12,3,64,0,0-128-0,|||0-0-0,1|(361,530)|
+10,39,Active Infectious,571,724,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,40,39,100,1,0,0,12,1,64,0,255-0-0,|||0-0-0,1|(487,712)|
+1,41,13,39,1,0,0,12,1,64,0,255-128-0,|||0-0-0,1|(670,754)|
+10,42,Deaths,1470,428,47,25,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+10,43,Hospital Capacity,1238,239,37,26,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,44,Fatality Rate,1361,369,75,30,8,3,0,4,0,0,0,0,-1--1--1,255-255-128,|||0-0-0,0,0,0,0,0,0
+10,45,Treated Fatality Rate,1534,295,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,46,Untreated Fatality Multiplier,1546,342,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,47,45,44,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+1,48,46,44,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,49,Fraction Requiring Hospitalization,1072,358,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,50,Public Health Capacity,1210,814,53,26,3,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,51,Potential Quarantine Effectiveness,847,869,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,52,Hospital Capacity Sensitivity,1555,389,75,30,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,53,52,44,0,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(0,0)|
+10,54,Hospital Strain,1214,324,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,55,Public Health Strain,922,725,75,30,8,131,0,0,-1,0,0,0,0,0,0,0,0,0
+1,56,55,13,1,0,0,12,1,192,0,255-128-0,|||0-0-0,1|(857,760)|
+1,57,54,44,1,0,0,12,1,192,0,255-128-0,|||0-0-0,1|(1298,322)|
+1,58,43,54,1,0,0,0,1,192,0,0-0-0,|||0-0-0,1|(1235,287)|
+10,59,Public Health Capacity Sensitivity,714,888,75,30,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,60,50,55,1,0,0,0,1,192,0,0-0-0,|||0-0-0,1|(1078,758)|
+10,61,Relative Contact Density,175,423,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+10,62,Contact Density Decline,20,360,75,30,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+1,63,62,61,0,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(0,0)|
+1,64,32,61,1,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(163,457)|
+1,65,61,33,1,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(248,417)|
+12,66,0,1778,764,150,150,3,47,0,0,2,0,0,0,0,0,0,0,0,0
+Public Health Strain,graph
+12,67,0,1778,464,150,150,3,47,0,0,2,0,0,0,0,0,0,0,0,0
+Hospital Strain,graph
+12,68,0,1776,243,98,34,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,||B|0-128-0,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+10,69,Effect of Season,241,224,75,30,8,3,1,0,0,0,0,0,0,0,0,0,0,0
+10,70,Peak Season,281,125,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,71,Seasonal Amplitude,183,122,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,72,70,69,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,73,Seasonal Period,79,157,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,74,73,69,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,75,Time,330,162,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,76,75,69,0,1,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+12,77,0,1013,144,92,11,0,7,0,18,0,0,0,0,-1--1--1,0-0-0,||B|128-0-0,0,0,0,0,0,0
+Disease Characteristics
+12,78,0,1013,194,54,11,0,7,0,18,-1,0,0,0,-1--1--1,0-0-0,||B|0-128-0,0,0,0,0,0,0
+Policy Levers
+12,79,0,1013,219,92,11,0,7,0,18,0,0,0,0,-1--1--1,0-0-0,||B|128-128-128,0,0,0,0,0,0
+Other/Minor Parameters
+12,80,0,1782,292,76,13,8,135,0,26,-1,0,253,253,-1--1--1,0-0-0,|10|U|0-0-255,0,0,0,0,0,0
+https://opensource.org/licenses/MIT|(C) 2020 - MIT License
+12,81,0,1013,169,106,11,0,7,0,18,-1,0,0,0,-1--1--1,0-0-0,||B|0-0-128,0,0,0,0,0,0
+Community Characteristics
+12,82,0,1541,879,73,23,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Controls
+10,83,Fraction of Contacts with Group,263,664,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+10,84,Contact Stratification,130,718,75,30,8,3,1,2,-1,0,0,0,-1--1--1,0-0-0,|||0-0-128,0,0,0,0,0,0
+1,85,84,83,1,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(220,703)|
+1,86,83,6,1,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(350,638)|
+10,87,Group Share,73,607,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,88,87,1,1,1,0,0,1,192,1,0-0-0,|||0-0-0,1|(191,609)|
+1,89,87,83,1,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(137,645)|
+10,90,High Risk Share,13,510,75,30,8,3,1,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,91,90,87,1,1,0,0,1,64,0,0-0-0,|||0-0-0,1|(28,552)|
+1,92,87,32,1,1,0,0,3,192,0,0-0-0,|||0-0-0,1|(100,516)|
+10,93,Observed Active Cases,1189,658,75,30,8,3,0,4,-1,0,0,0,-1--1--1,255-255-128,|||0-0-0,0,0,0,0,0,0
+1,94,3,93,1,0,0,12,1,192,0,0-128-0,|||0-0-0,1|(1189,615)|
+10,95,Fraction Observed,1368,682,75,30,8,2,1,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,96,95,93,0,1,0,0,1,192,0,0-0-0,|||0-0-0,1|(0,0)|
+10,97,Group Share,572,455,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,98,71,69,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+1,99,69,33,1,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(296,332)|
+10,100,Fraction Infectious,437,678,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,101,100,6,1,0,0,12,1,128,0,255-0-0,|||0-0-0,1|(409,637)|
+10,102,Initial Population,288,721,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,103,Group Share,384,741,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,104,102,100,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+1,105,103,100,0,1,0,0,2,128,0,-1--1--1,|||0-0-0,1|(0,0)|
+1,106,1,6,1,0,0,12,1,128,0,0-0-255,|||0-0-0,1|(316,609)|
+10,107,Relative Isolation Effectiveness for Low Risk,518,862,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,108,Relative Isolation Effectiveness,706,837,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,109,107,108,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,110,Relative Behavior Change for Low Risk,671,103,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,111,Relative Behavior Change,563,196,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,112,110,111,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,113,Available Hospital Beds per 000 Capita,1339,150,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+1,114,113,43,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,115,Beds per 000 COVID19 Patient,1174,150,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,116,115,43,0,1,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,117,Potential Frac Population Quarantined,1401,814,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+1,118,117,50,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,119,Initial Population,1249,97,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,120,Initial Population,1323,739,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,121,120,50,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+1,122,119,43,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,123,Behavior Response Time,808,242,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,124,Behavior Change Threshold,690,175,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,125,Behavior Sensitivity,703,227,75,30,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,126,Fatigue Threshold,714,370,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,127,126,195,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,128,LT Behavioral Cost,489,243,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,129,128,195,1,0,0,12,1,64,0,255-128-0,|||0-0-0,1|(515,285)|
+10,130,Cases per Capita,1145,728,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,131,Isolation Threshold,950,857,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,132,Isolation Threshold Sensitivity,1069,857,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,133,108,13,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,134,Initial Growth Rate,833,409,75,30,8,3,1,0,0,0,0,0,0,0,0,0,0,0
+1,135,134,2,1,1,0,0,2,128,1,-1--1--1,|||0-0-0,1|(677,444)|
+1,136,93,130,1,0,0,12,1,128,0,0-128-0,|||0-0-0,1|(1181,691)|
+1,137,120,130,1,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(1217,741)|
+10,138,High Risk Share,1405,292,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,139,138,44,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,140,Group Isolation,75,676,75,30,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,141,140,83,1,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(166,686)|
+10,142,Fraction Observed,530,388,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,143,142,23,0,1,0,0,1,128,1,0-0-0,|||0-0-0,1|(0,0)|
+1,144,97,23,0,1,0,0,1,128,1,0-0-0,|||0-0-0,1|(0,0)|
+12,145,0,1777,190,15,10,8,7,1,0,-1,0,0,0,0,0,0,0,0,0
+v12
+10,146,Infectious Asymptomatic,712,577,56,22,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+10,147,Infectious Symptomatic,915,578,54,23,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+1,148,150,147,4,0,0,22,1,0,0,255-0-0,|||0-0-0,1|(841,578)|
+1,149,150,146,100,0,0,22,1,0,0,255-0-0,|||0-0-0,1|(788,578)|
+11,150,0,815,578,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,151,Onset,815,616,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,152,154,146,4,0,0,22,1,0,0,255-0-0,|||0-0-0,1|(635,577)|
+1,153,154,2,100,0,0,22,1,0,0,255-0-0,|||0-0-0,1|(581,577)|
+11,154,0,608,577,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,155,Emerging,608,615,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,156,158,3,4,0,0,22,0,0,0,-1--1--1,,1|(1072,579)|
+1,157,158,147,100,0,0,22,0,0,0,-1--1--1,,1|(996,579)|
+11,158,0,1029,579,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,159,Advancing,1029,617,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,160,9,154,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(617,548)|
+1,161,2,155,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(564,613)|
+10,162,Time to Onset,803,508,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,163,Time to Advance,989,512,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,164,163,158,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(1007,553)|
+1,165,162,150,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(799,549)|
+1,166,146,151,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(761,613)|
+1,167,147,159,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(955,612)|
+1,168,169,42,4,0,0,22,0,0,0,-1--1--1,,1|(1370,426)|
+11,169,0,1311,426,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,170,Dying,1311,464,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,171,Infected Caseload,928,652,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,172,146,171,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(749,623)|
+1,173,147,171,1,0,0,12,1,128,0,255-128-0,|||0-0-0,1|(926,616)|
+1,174,171,55,1,0,0,12,1,128,0,255-128-0,|||0-0-0,1|(934,689)|
+1,175,147,93,1,0,0,12,1,128,0,0-128-0,|||0-0-0,1|(1005,648)|
+1,176,51,13,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,177,Mobilization,993,776,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,178,130,177,1,0,0,12,1,128,0,0-128-0,|||0-0-0,1|(1077,765)|
+1,179,177,13,1,0,0,12,1,128,0,0-128-0,|||0-0-0,1|(889,783)|
+1,180,131,177,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+1,181,132,177,0,0,0,0,1,64,0,0-0-0,|||0-0-0,1|(0,0)|
+10,182,Relative Isolation Effectiveness Pre Symptoms,429,788,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,183,146,39,1,0,0,12,1,128,0,255-0-0,|||0-0-0,1|(686,646)|
+1,184,147,39,1,0,0,12,1,128,0,255-0-0,|||0-0-0,1|(751,680)|
+1,185,44,169,1,0,0,12,1,128,0,255-128-0,|||0-0-0,1|(1343,403)|
+1,186,2,171,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(646,672)|
+1,187,182,39,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(521,754)|
+1,188,163,147,0,1,0,0,1,64,1,192-192-192,|||0-0-0,1|(0,0)|
+1,189,162,146,0,1,0,0,1,64,1,0-0-0,|||0-0-0,1|(0,0)|
+1,190,9,2,0,1,0,0,1,128,1,0-0-0,|||0-0-0,1|(0,0)|
+10,191,Time to Onset,69,297,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,192,Time to Advance,129,259,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,193,192,10,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+1,194,191,10,0,1,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,195,Social Mobilization,562,316,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,196,195,24,1,0,0,12,1,128,0,0-128-0,|||0-0-0,1|(489,320)|
+1,197,124,195,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,198,125,195,0,1,0,0,0,64,0,-1--1--1,,1|(0,0)|
+1,199,123,195,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,200,111,195,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,201,Self Isolation Effectiveness,586,795,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+1,202,201,39,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+1,203,59,13,0,1,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,204,Hospitalized,1176,429,55,24,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+1,205,169,204,36,0,0,22,2,0,0,-1--1--1,|||0-0-0,1|(1268,426)|
+1,206,207,4,4,0,0,22,0,0,0,-1--1--1,,3|(1454,484)|(1454,482)|(1454,516)|
+11,207,0,1393,484,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,208,Hospitalized Recovering,1393,522,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,209,208,204,1,17,0,0,0,64,0,-1--1--1,,1|(1286,480)|
+1,210,207,204,36,0,0,22,2,0,0,-1--1--1,|||0-0-0,3|(1208,484)|(1208,484)|(1208,468)|
+1,211,204,54,1,0,0,0,0,128,0,-1--1--1,,1|(1170,376)|
+1,212,204,208,1,0,0,0,0,128,0,-1--1--1,,1|(1277,499)|
+10,213,Serious Duration,1534,493,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,214,213,170,1,0,0,0,0,128,0,-1--1--1,,1|(1421,458)|
+1,215,204,170,1,0,0,0,0,128,0,-1--1--1,,1|(1258,445)|
+1,216,213,208,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,217,44,207,1,0,0,0,0,64,0,-1--1--1,,1|(1386,418)|
+1,218,23,2,0,1,0,0,0,64,1,-1--1--1,,1|(0,0)|
+10,219,Initial Observable Infection Rate,431,426,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,220,219,23,0,1,0,0,0,64,1,-1--1--1,,1|(0,0)|
+1,221,223,204,4,0,0,22,0,0,0,-1--1--1,,1|(1061,426)|
+1,222,223,147,100,0,0,22,0,0,0,-1--1--1,,1|(915,426)|
+11,223,0,996,426,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,224,Hospitalizing,996,464,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,225,49,223,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,226,147,224,1,0,0,0,0,128,0,-1--1--1,,1|(931,498)|
+1,227,163,224,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,228,49,158,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,229,14,3,1,0,0,0,0,128,1,-1--1--1,,1|(1299,645)|
+1,230,213,204,0,0,0,0,0,128,1,-1--1--1,,1|(0,0)|
+10,231,Initial Growth Rate,1156,500,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,232,231,204,0,0,0,0,0,128,1,-1--1--1,,1|(0,0)|
+1,233,231,3,0,0,0,0,0,128,1,-1--1--1,,1|(0,0)|
+1,234,134,147,0,1,0,0,1,128,1,192-192-192,|||0-0-0,1|(0,0)|
+1,235,134,146,0,1,0,0,1,128,1,192-192-192,|||0-0-0,1|(0,0)|
+1,236,204,93,1,0,0,0,0,128,0,-1--1--1,,1|(1229,565)|
+1,237,49,44,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,238,growth rate,521,661,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,239,6,238,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,240,TIME STEP,521,689,75,30,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,241,240,238,0,1,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,242,Lockdown Phasing,414,195,75,30,8,3,1,0,0,0,0,0,0,0,0,0,0,0
+1,243,242,24,0,1,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,244,Phase Duration,539,87,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,245,244,242,0,1,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,246,Phasing Amplitude,320,83,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,247,246,242,0,1,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,248,Phasing Start,420,96,75,30,8,3,1,0,-1,0,0,0,0,0,0,0,0,0
+1,249,248,242,0,1,0,0,0,64,0,-1--1--1,,1|(0,0)|
+12,250,0,1694,154,51,17,8,135,0,18,-1,0,253,253,-1--1--1,0-0-0,||U|0-0-255,0,0,0,0,0,0
+http://metasd.com|metasd.com
+12,251,0,1851,154,51,17,8,135,0,18,-1,0,253,253,-1--1--1,0-0-0,||U|0-0-255,0,0,0,0,0,0
+http://vensim.com|vensim.com
+12,252,0,1772,195,10,10,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+v14x
+10,253,Log10 Fatality Rate,1532,227,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+1,254,253,45,0,0,0,0,0,192,1,-1--1--1,,1|(0,0)|
+10,255,Hospitalization per Capita,837,334,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,256,204,255,1,0,0,12,1,192,0,0-128-0,|||0-0-0,1|(978,362)|
+1,257,255,195,1,0,0,12,1,192,0,0-128-0,|||0-0-0,1|(696,317)|
+10,258,Initial Population,973,299,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,259,258,255,0,0,0,0,0,192,0,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Cost
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,133,0
+10,1,Infection Cost,714,394,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,2,Mortality Cost,713,301,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,3,Statistical Value of Life,573,219,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,4,Hospitalization Cost,540,314,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,5,Lost Work Cost,537,429,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,6,3,2,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,7,4,1,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,8,5,1,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,9,Mitigation Cost,734,651,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+12,10,0,729,780,64,18,8,7,1,0,-1,0,0,0,0,0,0,0,0,0
+Todo: capacities, isolation
+1,11,2,35,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,12,1,35,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,13,9,35,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,14,Adapted Behavioral Risk,534,490,42,25,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+12,15,48,349,489,10,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,16,18,14,4,0,0,22,0,0,0,-1--1--1,,1|(461,489)|
+1,17,18,15,100,0,0,22,0,0,0,-1--1--1,,1|(388,489)|
+11,18,0,424,489,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,19,Adapting,424,527,75,30,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,20,ST Behavioral Cost,530,575,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,21,14,20,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,22,14,19,1,0,0,0,0,128,0,-1--1--1,,1|(478,521)|
+10,23,Time to Adapt,400,430,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,24,23,18,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,25,20,9,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,26,Behavior Nonlinearity,381,638,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,27,Behavior Cost Scale,378,694,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,28,26,20,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,29,27,20,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,30,Cumulative Cost,1085,467,45,22,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+12,31,48,866,467,10,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,32,34,30,4,0,0,22,0,0,0,-1--1--1,,1|(1002,467)|
+1,33,34,31,100,0,0,22,0,0,0,-1--1--1,,1|(914,467)|
+11,34,0,958,467,6,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,35,Total Cost,958,505,75,30,40,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,36,Behavior Cost LT Multiplier,378,750,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,37,LT Behavioral Cost,528,650,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,38,36,37,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,39,37,9,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+12,40,0,1310,321,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Total Cost,graph
+12,41,0,1310,620,150,150,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Cumulative Cost,graph
+10,42,Relative Behavioral Risk,313,566,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,43,42,19,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,44,Mildly Ill or Asymptomatic,416,355,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,45,44,1,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,46,Exposed,583,899,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,47,46,9,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,48,Recovered,572,848,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,49,48,9,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,50,Susceptible,565,793,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,51,50,9,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+1,52,42,14,1,0,0,0,0,64,1,-1--1--1,,1|(427,551)|
+1,53,42,20,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,54,LT Cost Time Scale,385,809,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,55,54,37,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,56,Labor Participation,651,489,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,57,56,1,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,58,20,37,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,59,56,20,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,60,Dying,558,264,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,61,60,2,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,62,Hospitalized,419,394,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,63,62,1,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,64,Infectious Symptomatic,406,310,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,65,64,1,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,66,Future Harm Cost,707,151,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,67,Residual Harm per Recovery,541,101,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,68,Recovering,524,142,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,69,Hospitalized Recovering,534,179,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,70,68,66,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,71,69,66,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,72,67,66,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,73,66,34,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,74,Residual Hospitalization Cost,687,73,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,75,74,66,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,76,Fraction Behavior as Distance,269,614,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,77,76,20,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy - Hospitalization & Deaths
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+12,1,0,744,66,97,24,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,343,66,119,36,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,0,1199,165,236,155,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Hospital Strain,graph
+12,4,0,1199,475,236,155,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Total Deaths,Graph
+10,5,Behavioral Risk Reduction,658,164,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,6,Potential Quarantine Effectiveness,830,173,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,7,Time to Infectious,308,229,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,8,Treated Fatality Rate,308,461,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,9,Untreated Fatality Multiplier,308,381,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,10,Seasonal Amplitude,464,464,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,11,Initial Population,308,533,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+12,12,0,99,65,73,23,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Structure
+12,13,0,99,128,73,23,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,14,0,99,192,73,23,3,135,0,22,-1,0,4,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,15,0,379,601,356,21,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,||B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+12,16,0,209,128,20,20,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|||0-0-0,0,0,0,0,0,0
+10,17,R0,308,159,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,18,Mild Duration,465,298,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,19,Fraction Requiring Hospitalization,466,382,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,20,High Risk Share,466,158,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,21,Time to Onset,465,228,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,22,Time to Advance,310,298,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,23,Relative Behavior Change for Low Risk,662,224,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,24,Fatigue Threshold,661,289,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,25,Relative Isolation Effectiveness for Low Risk,835,340,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,26,Relative Isolation Effectiveness Pre Symptoms,835,259,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,27,Self Isolation Effectiveness,659,368,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+12,28,0,99,256,73,23,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Cost
+12,29,0,99,319,73,23,3,135,0,22,-1,0,6,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Sensitivity
+10,30,Log10 Fatality Rate,159,462,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,31,30,8,0,0,0,0,0,64,1,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy - Infection
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+12,1,0,744,66,97,24,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,343,66,119,36,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,0,1199,165,236,155,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Infecting,graph
+12,4,0,1199,475,236,155,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Mildly Ill or Asymptomatic,Graph
+12,5,0,99,65,73,23,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Structure
+12,6,0,99,128,73,23,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,7,0,99,192,73,23,3,135,0,22,-1,0,4,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,8,0,379,601,356,21,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,||B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+12,9,0,209,192,20,20,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|||0-0-0,0,0,0,0,0,0
+10,10,Behavioral Risk Reduction,658,164,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,11,Potential Quarantine Effectiveness,830,173,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,12,Time to Infectious,308,229,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,13,Treated Fatality Rate,308,461,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,14,Untreated Fatality Multiplier,308,381,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,15,Seasonal Amplitude,464,464,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,16,Initial Population,308,533,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+10,17,R0,308,159,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,18,Mild Duration,465,298,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,19,Fraction Requiring Hospitalization,466,382,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,20,High Risk Share,466,158,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,21,Time to Onset,465,228,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,22,Time to Advance,310,298,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,23,Relative Behavior Change for Low Risk,662,224,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,24,Fatigue Threshold,661,289,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,25,Relative Isolation Effectiveness for Low Risk,835,340,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,26,Relative Isolation Effectiveness Pre Symptoms,835,259,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,27,Self Isolation Effectiveness,659,368,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+12,28,0,99,256,73,23,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Cost
+12,29,0,99,319,73,23,3,135,0,22,-1,0,6,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Sensitivity
+10,30,Log10 Fatality Rate,163,459,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,31,30,13,0,0,0,0,0,64,1,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy - Cost
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+12,1,0,744,66,97,24,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,343,66,119,36,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,0,1199,165,236,155,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Total Deaths,Graph
+12,4,0,1199,475,236,155,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Cumulative Cost,Graph
+12,5,0,99,65,73,23,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Structure
+12,6,0,99,128,73,23,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,7,0,99,192,73,23,3,135,0,22,-1,0,4,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,8,0,379,601,356,21,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,||B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+10,9,Behavioral Risk Reduction,658,164,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,10,Potential Quarantine Effectiveness,830,173,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,11,Time to Infectious,308,229,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,12,Treated Fatality Rate,308,461,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,13,Untreated Fatality Multiplier,308,381,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,14,Seasonal Amplitude,464,464,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,15,Initial Population,308,533,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+10,16,R0,308,159,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,17,Mild Duration,465,298,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,18,Fraction Requiring Hospitalization,466,382,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,19,High Risk Share,466,158,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,20,Time to Onset,465,228,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,21,Time to Advance,310,298,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,22,Relative Behavior Change for Low Risk,662,224,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,23,Fatigue Threshold,661,289,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,24,Relative Isolation Effectiveness for Low Risk,835,340,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,25,Relative Isolation Effectiveness Pre Symptoms,835,259,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,26,Self Isolation Effectiveness,659,368,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+12,27,0,99,256,73,23,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Cost
+12,28,0,209,256,20,20,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|||0-0-0,0,0,0,0,0,0
+12,29,0,99,319,73,23,3,135,0,22,-1,0,6,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Sensitivity
+10,30,Statistical Value of Life,1556,170,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,31,Hospitalization Cost,1557,222,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,32,Lost Work Cost,1559,273,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,33,Behavior Cost Scale,1565,516,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,34,Behavior Cost LT Multiplier,1565,572,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,35,Residual Harm per Recovery,1553,111,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,36,Residual Hospitalization Cost,1557,50,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,37,Fraction Behavior as Distance,1563,454,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,38,Log10 Fatality Rate,153,461,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,39,38,12,0,0,0,0,0,64,1,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy - Sensitivity
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+12,1,0,744,76,97,24,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,343,76,119,36,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,0,1199,175,236,155,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Total Deaths,Sensitivity Graph
+12,4,0,1199,485,236,155,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Cumulative Cost,Sensitivity Graph
+12,5,0,99,75,73,23,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Structure
+12,6,0,99,138,73,23,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,7,0,99,202,73,23,3,135,0,22,-1,0,4,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,8,0,379,611,356,21,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,||B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+10,9,Behavioral Risk Reduction,658,174,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,10,Potential Quarantine Effectiveness,830,183,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,11,Time to Infectious,308,239,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,12,Treated Fatality Rate,308,471,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,13,Untreated Fatality Multiplier,308,391,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,14,Seasonal Amplitude,464,474,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,15,Initial Population,308,543,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-0-128,0,0,0,0,0,0
+10,16,R0,308,169,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,17,Mild Duration,465,308,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,18,Fraction Requiring Hospitalization,466,392,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,19,High Risk Share,466,168,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,20,Time to Onset,465,238,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,21,Time to Advance,310,308,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||128-0-0,0,0,0,0,0,0
+10,22,Relative Behavior Change for Low Risk,662,234,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,23,Fatigue Threshold,661,299,75,30,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,24,Relative Isolation Effectiveness for Low Risk,835,350,75,30,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,25,Relative Isolation Effectiveness Pre Symptoms,835,269,75,30,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+10,26,Self Isolation Effectiveness,659,378,75,30,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|||0-128-0,0,0,0,0,0,0
+12,27,0,99,266,73,23,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Cost
+12,28,0,99,329,73,23,3,135,0,22,-1,0,5,0,-1--1--1,0-0-128,||B|255-255-255,0,0,0,0,0,0
+Sensitivity
+12,29,0,209,329,20,20,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|||0-0-0,0,0,0,0,0,0
+10,30,Log10 Fatality Rate,152,470,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,31,30,12,0,0,0,0,0,64,1,-1--1--1,,1|(0,0)|
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Indicators
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+10,1,Initial Test Rate,525,354,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,2,INITIAL TIME,355,458,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,3,Max Test Rate,374,393,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,4,Test Growth Rate,409,351,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,5,Time,364,424,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,6,Case Reporting Lag,811,889,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,7,Mildly Ill or Asymptomatic,328,828,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,8,Exposed,222,750,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,9,Recovered,222,806,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,10,Susceptible,254,698,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,11,Prevalence,432,705,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,12,Observable Prevalence,475,762,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,13,Population,332,768,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,14,10,13,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,15,7,13,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,16,8,13,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,17,9,13,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,18,13,11,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,19,13,12,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,20,8,11,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,21,7,11,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,22,Base Rate of Similar Symptoms,251,641,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,23,Prevalence Among Symptomatic,441,642,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,24,11,23,1,0,0,0,0,128,0,-1--1--1,,1|(432,675)|
+1,25,22,23,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,26,Observed Active Cases,473,828,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+12,27,0,1122,211,242,170,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Cases
+12,28,0,1598,203,217,164,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Tests
+1,29,32,26,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+1,30,7,26,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+1,31,26,12,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,32,Fraction Observed,636,827,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,33,Initial Case Capture,693,705,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,34,Eventual Case Capture,798,688,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,35,Time to Max Capture,819,752,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,36,35,32,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,37,33,32,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,38,34,32,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,39,INITIAL TIME,821,803,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,40,39,32,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,41,Time,816,843,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,42,41,32,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,43,Linear Testing,534,447,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,44,1,43,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+10,45,INITIAL TIME,476,516,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,46,45,43,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+1,47,3,43,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+1,48,4,43,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+10,49,Time,562,555,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,50,49,43,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+10,51,Observed Case Onset,467,884,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,52,32,51,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,53,Reported Cases,644,890,41,24,3,131,0,0,0,0,0,0,0,0,0,0,0,0
+1,54,51,53,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,55,6,53,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,56,Historic Growth Rate,813,976,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,57,56,53,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,58,Total Deaths,233,879,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+10,59,Reported Deaths,646,1069,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,60,Death Reporting Lag,814,1068,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,61,60,59,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+1,62,56,59,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+12,63,0,1176,599,242,170,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Fit_Cases
+12,64,0,1652,591,217,164,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Fit_Deaths
+10,65,R0,1067,809,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,66,Treated Fatality Rate,1500,809,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,67,Infectious Symptomatic,330,897,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,68,67,26,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,69,Onset,467,920,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,70,69,51,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,71,Dying,646,1107,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,72,71,59,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,73,Total Susceptible,109,695,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,74,10,73,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,75,Total Exposed,89,760,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,76,8,75,0,0,0,0,0,128,0,-1--1--1,,1|(0,0)|
+10,77,Total Recovered,93,825,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,78,9,77,0,0,0,0,0,0,0,-1--1--1,,1|(0,0)|
+10,79,Total Deaths,402,998,75,30,8,131,0,0,0,0,0,0,0,0,0,0,0,0
+10,80,Total Recovered,400,1145,75,30,8,130,0,0,0,0,0,0,0,0,0,0,0,0
+10,81,Total Fatality Rate,381,1070,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,82,79,81,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+1,83,80,81,0,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(0,0)|
+10,84,Observed Fatality Rate,394,1224,75,30,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,85,79,84,1,0,0,0,1,128,0,0-0-0,|||0-0-0,1|(452,1119)|
+10,86,Deaths,402,1032,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,87,86,79,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+1,88,32,84,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,89,Recovered,394,1260,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,90,89,84,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,91,Hospitalized,473,864,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,92,91,26,0,0,0,0,0,64,0,-1--1--1,,1|(0,0)|
+10,93,Initial Observable Infection Rate,1267,810,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,94,Log10 Fatality Rate,1500,857,75,30,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|||128-128-128,0,0,0,0,0,0
+1,95,94,66,0,0,0,0,0,64,1,-1--1--1,,1|(0,0)|
+10,96,Peak Prevalence,583,646,75,30,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,97,11,96,0,0,0,0,0,192,0,-1--1--1,,1|(0,0)|
+///---\\\
+:GRAPH Infection_Sources
+:TITLE Infection Sources
+:SCALE
+:VAR Infecting
+:VAR Importing Exposed
+:VAR Importing Infected
+:VAR Intercepting
+
+:GRAPH Risk_-_Cost
+:TITLE Risk - Cost
+:X-AXIS Relative Behavioral Risk[High]
+:SCALE
+:VAR ST Behavioral Cost[High]
+:VAR LT Behavioral Cost[High]
+
+:GRAPH Cases
+:TITLE Cases
+:X-MAX 30
+:SCALE
+:VAR CDC US Cases Onset
+:Y-MAX 12000
+:VAR CDC US Incr Cases Reported
+:VAR JHU CSSE US Incr Cases
+:VAR Infecting[Risk]
+
+:GRAPH Tests
+:TITLE Tests
+:X-MAX 30
+:SCALE
+:VAR CDC US Tests
+:Y-MAX 10000
+:VAR Linear Testing
+:SCALE
+:VAR Cases per Test
+:Y-MAX 1
+
+:GRAPH Fit_Cases
+:TITLE Fit Cases
+:X-MAX 25
+:SCALE
+:VAR JHU CSSE US Incr Cases
+:LINE-WIDTH 2
+:VAR Reported Cases
+:LINE-WIDTH 3
+
+:GRAPH Fit_Deaths
+:TITLE Fit Deaths
+:X-MAX 25
+:SCALE
+:VAR JHU CSSE US Incr Deaths
+:LINE-WIDTH 2
+:VAR Reported Deaths
+:LINE-WIDTH 3
+:L<%^E!@
+1:controlled.vdfx
+1:uncontrolled.vdfx
+4:Time
+5:growth rate
+6:High
+6:Low
+9:controlled
+19:100,0
+24:0
+25:365
+26:365
+22:case,cases
+22:day,days
+22:dmnl,index
+22:people,person
+22:test,tests
+30:?US case test data=US cases & tests.xlsx
+11:ccv11 fit mcmc.voc
+12:cal us cases deaths 11.vpd
+23:0
+18:ccv12 uncert.vsc
+20:ccv9 save.lst
+15:1,0,0,0,0,0
+27:0,
+34:0,
+42:0
+72:0
+73:0
+35:Date
+36:YYYY-MM-DD
+37:2020
+38:3
+39:1
+40:4
+41:1
+95:0
+96:0
+97:0
+77:1
+78:0
+102:1
+93:0
+94:0
+92:0
+91:0
+90:0
+87:0
+75:
+43:
+103:8,8,8,3,8
+105:0,0,0,0,0,0,0,0,0,0
+104:Arial Unicode MS|12||0-0-0|0-0-0|-1--1--1|0-0-255|192-192-192|-1--1--1
