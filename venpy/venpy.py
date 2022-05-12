@@ -341,7 +341,8 @@ class VenPy(object):
             raise Exception("No variables of specified type(s).")
 
         timeaxis, n = self.getresult('Time')
-        simaxis = []  # only needed for sensitivity runs; populated later
+        timeaxis = np.array(timeaxis)
+        simaxis = None  # only needed for sensitivity runs; populated later
         if sensitivitytime:
             if sensitivitytime not in timeaxis:
                 raise Exception("Sensitivity time not found in time axis.")
@@ -358,8 +359,8 @@ class VenPy(object):
         for v in allvars:
             if sensitivitytime:
                 vval, n = self.getsensitivity(v, sensitivitytime)
-                if not simaxis:
-                    simaxis = range(n)
+                if simaxis is None:
+                    simaxis = np.arange(n)
                 result[v] = np.array(vval)
             else:
                 vval, n = self.getresult(v)
@@ -367,9 +368,10 @@ class VenPy(object):
             # todo: it would make sense to check these results for consistent length
 
         if sensitivitytime:
-            return pd.DataFrame(result, index=np.array(simaxis)).rename(index={0: "Simulation"})
+            df = pd.DataFrame(result, index=simaxis).rename_axis("Simulation")
+            return df
         else:
-            return pd.DataFrame(result, index=np.array(timeaxis)).rename(index={0: "Time"})
+            return pd.DataFrame(result, index=np.array(timeaxis)).rename_axis("Time")
 
     def _run_udfs(self):
         for key in self.components:
